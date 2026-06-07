@@ -458,69 +458,132 @@ function letter(i){
   return String.fromCharCode(65+i);
 }
 
+function letter(i){
+  return String.fromCharCode(65+i);
+}
+
+function shuffleArray(arr){
+  const a = [...arr];
+  for(let i = a.length - 1; i > 0; i--){
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+function prepareQuestion(q){
+  const mapped = q.options.map((text, originalIndex)=>({
+    text:text,
+    originalIndex:originalIndex
+  }));
+
+  const shuffled = shuffleArray(mapped);
+
+  q.renderedOptions = shuffled.map(x=>x.text);
+  q.renderedAnswers = shuffled
+    .map((x,newIndex)=>q.answers.includes(x.originalIndex) ? newIndex : -1)
+    .filter(x=>x !== -1);
+}
+
 function renderUnit(key){
-  const unit=DATA[key];
-  const container=document.getElementById("quiz-"+key);
-  container.innerHTML="";
+  const unit = DATA[key];
+  const container = document.getElementById("quiz-" + key);
+  container.innerHTML = "";
+
   unit.questions.forEach((q,qi)=>{
-    const inputType=q.type==="multiple"?"checkbox":"radio";
-    let html=`<div class="question">
-      <span class="qtype">${q.type==="multiple"?"Multiple answers":"Single answer"}</span>
-      <div class="question-title">${q.q}</div>`;
-    q.options.forEach((opt,oi)=>{
-      html+=`<label><input type="${inputType}" name="${key}-q${qi}" value="${oi}"> ${letter(oi)}) ${opt}</label>`;
+    prepareQuestion(q);
+
+    const inputType = q.type === "multiple" ? "checkbox" : "radio";
+
+    let html = `<div class="question">
+      <span class="qtype">${q.type === "multiple" ? "Multiple answers" : "Single answer"}</span>
+      <div class="question-title">${qi + 1}. ${q.q.replace(/^\d+\.\s*/, "")}</div>
+    `;
+
+    q.renderedOptions.forEach((opt,oi)=>{
+      html += `<label>
+        <input type="${inputType}" name="${key}-q${qi}" value="${oi}">
+        ${letter(oi)}) ${opt}
+      </label>`;
     });
-    html+=`</div>`;
-    container.innerHTML+=html;
+
+    html += `</div>`;
+    container.innerHTML += html;
   });
 }
 
 function arraysEqual(a,b){
-  if(a.length!==b.length)return false;
-  const aa=[...a].sort((x,y)=>x-y);
-  const bb=[...b].sort((x,y)=>x-y);
-  return aa.every((v,i)=>v===bb[i]);
+  if(a.length !== b.length) return false;
+
+  const aa = [...a].sort((x,y)=>x-y);
+  const bb = [...b].sort((x,y)=>x-y);
+
+  return aa.every((v,i)=>v === bb[i]);
 }
 
 function getSelected(key,qi){
-  return Array.from(document.querySelectorAll(`input[name="${key}-q${qi}"]:checked`)).map(x=>Number(x.value));
+  return Array.from(
+    document.querySelectorAll(`input[name="${key}-q${qi}"]:checked`)
+  ).map(x=>Number(x.value));
 }
 
 function answerText(q,arr){
-  if(!arr||arr.length===0)return "Ответ не выбран";
-  return arr.map(i=>`${letter(i)}) ${q.options[i]}`).join("; ");
+  if(!arr || arr.length === 0) return "Ответ не выбран";
+
+  return arr
+    .map(i=>`${letter(i)}) ${q.renderedOptions[i]}`)
+    .join("; ");
 }
 
 function checkUnit(key){
-  const unit=DATA[key];
-  let score=0;
-  let details="";
+  const unit = DATA[key];
+  let score = 0;
+  let details = "";
+
   unit.questions.forEach((q,qi)=>{
-    const selected=getSelected(key,qi);
-    const ok=arraysEqual(selected,q.answers);
-    if(ok)score++;
-    details+=`<div class="answer-card ${ok?"correct":"wrong"}">
-      <div class="${ok?"correct-text":"wrong-text"}">${ok?"✔":"✘"} ${q.q}</div>
+    const selected = getSelected(key,qi);
+    const correctAnswers = q.renderedAnswers;
+    const ok = arraysEqual(selected,correctAnswers);
+
+    if(ok) score++;
+
+    details += `<div class="answer-card ${ok ? "correct" : "wrong"}">
+      <div class="${ok ? "correct-text" : "wrong-text"}">
+        ${ok ? "✔" : "✘"} ${qi + 1}. ${q.q.replace(/^\d+\.\s*/, "")}
+      </div>
+
       <div class="explain">
-        <b>Правильный ответ:</b> ${answerText(q,q.answers)}<br>
+        <b>Правильный ответ:</b> ${answerText(q,correctAnswers)}<br>
         <b>Ваш ответ:</b> ${answerText(q,selected)}<br><br>
+
         <b>Explanation RU:</b> ${q.ru}<br>
         <b>Explanation KZ:</b> ${q.kz}<br>
+
         <span class="small"><b>Source:</b> ${q.source}</span>
       </div>
     </div>`;
   });
 
-  const percent=Math.round(score/unit.questions.length*100);
-  let level=percent>=80?"Жақсы нәтиже / Хороший результат":percent>=50?"Орташа нәтиже / Средний результат":"Қайталау керек / Нужно повторить";
+  const percent = Math.round(score / unit.questions.length * 100);
 
-  document.getElementById("result-"+key).innerHTML=`<div class="summary">
-    <h2>${unit.title}</h2>
-    <h2>${score} / ${unit.questions.length} (${percent}%)</h2>
-    <p><b>${level}</b></p>
-  </div>`+details;
+  let level = percent >= 80
+    ? "Жақсы нәтиже / Хороший результат"
+    : percent >= 50
+      ? "Орташа нәтиже / Средний результат"
+      : "Қайталау керек / Нужно повторить";
 
-  document.getElementById("result-"+key).scrollIntoView({behavior:"smooth",block:"start"});
+  document.getElementById("result-" + key).innerHTML = `
+    <div class="summary">
+      <h2>${unit.title}</h2>
+      <h2>${score} / ${unit.questions.length} (${percent}%)</h2>
+      <p><b>${level}</b></p>
+    </div>
+  ` + details;
+
+  document.getElementById("result-" + key).scrollIntoView({
+    behavior:"smooth",
+    block:"start"
+  });
 }
 
 renderUnit("unit21");
